@@ -1,34 +1,47 @@
 import streamlit as st
 import pandas as pd
+import openai
 from datetime import datetime
+import os
+from dotenv import load_dotenv
 
-def process_conversation(conversation):
-    lines = conversation.split('\n')
-    reporter = lines[0].split()[0]
-    date_time = ' '.join(lines[0].split()[1:4])
-    try:
-        date_time = datetime.strptime(date_time, '%d %b at %I:%M %p')
-        report_date = date_time.strftime('%d %b')
-        report_time = date_time.strftime('%I:%M %p')
-    except ValueError:
-        report_date = "Date not specified"
-        report_time = "Time not specified"
-    
-    customer = next((line.split(': ')[1].strip() for line in lines if 'Customer:' in line), "Not specified")
-    du = next((line.split('DU:')[1].strip() for line in lines if 'DU:' in line), "Not specified")
-    
-    notes = ' '.join(lines[1:])
-    resolution_date = ""
-    resolution_time = ""
-    
-    last_line = lines[-1].strip()
-    if ":" in last_line and not last_line.startswith(reporter):
-        resolution_parts = last_line.split()
-        if len(resolution_parts) >= 3:
-            resolution_date = ' '.join(resolution_parts[:2])
-            resolution_time = ' '.join(resolution_parts[2:])
+# Load environment variables
+load_dotenv()
 
-    return [reporter, report_date, report_time, customer, du, notes, resolution_date, resolution_time]
+# Set up OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+def get_gpt_response(conversation):
+    prompt = f"""
+    Given the following conversation, extract and format the information as follows:
+    - Reporter: The person who reported the issue
+    - Report Date: The date the issue was reported (format: DD Mon)
+    - Report Time: The time the issue was reported (format: HH:MM AM/PM)
+    - Customer: The name of the customer
+    - DU: The DU number(s) mentioned
+    - Notes: A summary of the issue and any actions taken
+    - Resolution Date: The date the issue was resolved, if mentioned (format: DD Mon)
+    - Resolution Time: The time the issue was resolved, if mentioned (format: HH:MM AM/PM)
+
+    If any information is not available, use "Not specified".
+    Format the output as a single line with values separated by ' | '.
+
+    Conversation:
+    {conversation}
+
+    Output format:
+    Reporter | Report Date | Report Time | Customer | DU | Notes | Resolution Date | Resolution Time
+    """
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are a Expert helpfull assistant that extracts information from conversations."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    return response.choices[0].message['content'].strip()
 
 def main():
     st.set_page_config(page_title="Conversation Processor", layout="wide")
@@ -38,14 +51,19 @@ def main():
 
     if st.button("Process"):
         if conversation:
-            result = process_conversation(conversation)
-            df = pd.DataFrame([result], columns=["Reporter", "Report Date", "Report Time", "Customer", "DU", "Notes", "Resolution Date", "Resolution Time"])
-            st.dataframe(df)
+            result = get_gpt_response(conversation)
+            result_list = result.split(' | ')
             
-            # Display as a formatted string
-            formatted_output = f"| {' | '.join(result)} |"
-            st.text("Formatted Output:")
-            st.code(formatted_output, language='markdown')
+            if len(result_list) == 8:  # Ensure we have all 8 fields
+                df = pd.DataFrame([result_list], columns=["Reporter", "Report Date", "Report Time", "Customer", "DU", "Notes", "Resolution Date", "Resolution Time"])
+                st.dataframe(df)
+                
+                # Display as a formatted string
+                formatted_output = f"| {result} |"
+                st.text("Formatted Output:")
+                st.code(formatted_output, language='markdown')
+            else:
+                st.error("Error in processing. Please try again or refine the conversation input.")
         else:
             st.warning("Please enter a conversation to process.")
 
