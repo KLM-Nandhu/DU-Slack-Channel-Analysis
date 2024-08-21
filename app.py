@@ -31,6 +31,7 @@ def process_conversation(conversation):
     return [reporter, report_date, report_time, customer, du, notes, resolution_date, resolution_time]
 
 def main():
+    st.set_page_config(page_title="Conversation Processor", layout="wide")
     st.title("Conversation Processor")
 
     conversation = st.text_area("Enter the conversation here:", height=300)
@@ -39,7 +40,7 @@ def main():
         if conversation:
             result = process_conversation(conversation)
             df = pd.DataFrame([result], columns=["Reporter", "Report Date", "Report Time", "Customer", "DU", "Notes", "Resolution Date", "Resolution Time"])
-            st.write(df)
+            st.dataframe(df)
             
             # Display as a formatted string
             formatted_output = f"| {' | '.join(result)} |"
