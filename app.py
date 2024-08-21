@@ -70,7 +70,7 @@ def main():
     st.title("Conversation Processor")
 
     # Add a button to show/hide history
-    if st.sidebar.button("Toggle History"):
+    if st.sidebar.button("History"):
         st.session_state.show_history = not st.session_state.get('show_history', False)
 
     # Show history if the state is true
